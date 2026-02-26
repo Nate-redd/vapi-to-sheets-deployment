@@ -12,11 +12,18 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 def get_sheets_service():
     """Authenticates and returns the Google Sheets API service."""
     creds = None
-    if os.path.exists('credentials.json'):
-        creds = Credentials.from_service_account_file(
-            'credentials.json', scopes=SCOPES)
+    if os.getenv("GOOGLE_CREDENTIALS"):
+        # Load from Environment Variable for deployed systems (like Render)
+        import json
+        from google.oauth2.service_account import Credentials
+        creds_dict = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
+        creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+    elif os.path.exists('credentials.json'):
+        # Load from local file for dev
+        from google.oauth2.service_account import Credentials
+        creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
     else:
-        raise FileNotFoundError("credentials.json not found in the root directory")
+        raise FileNotFoundError("credentials.json not found and GOOGLE_CREDENTIALS env var not set")
 
     service = build('sheets', 'v4', credentials=creds)
     return service
