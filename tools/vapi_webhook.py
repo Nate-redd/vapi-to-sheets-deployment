@@ -66,19 +66,18 @@ async def vapi_webhook(request: Request, api_key: str = Security(get_api_key)):
 
     # 1. Try legacy structuredData (Deprecated)
     analysis = payload.get("message", {}).get("analysis", {})
+    if not analysis:
+         analysis = payload.get("message", {}).get("call", {}).get("analysis", {})
+         
     structured_data = analysis.get("structuredData", {})
     
-    # 2. Try new structuredOutputs array
+    # 2. Try new structuredOutputs dictionary
     if not structured_data:
-        artifact = payload.get("message", {}).get("artifact", {})
-        # Sometimes artifact is nested inside "call" depending on webhook trigger type
-        if not artifact:
-             artifact = payload.get("message", {}).get("call", {}).get("artifact", {})
-             
-        structured_outputs = artifact.get("structuredOutputs", [])
-        if structured_outputs and isinstance(structured_outputs, list):
-             # Extract the 'result' object from the first structured output
-             structured_data = structured_outputs[0].get("result", {})
+        structured_outputs = analysis.get("structuredOutputs", {})
+        if structured_outputs and isinstance(structured_outputs, dict):
+             # Grab the first random key since there is only one schema
+             first_key = list(structured_outputs.keys())[0]
+             structured_data = structured_outputs[first_key].get("result", {})
 
     print(f"Extracted Structured Data: {structured_data}")
 
@@ -86,6 +85,16 @@ async def vapi_webhook(request: Request, api_key: str = Security(get_api_key)):
         print("Warning: No structuredData or structuredOutputs found in the VAPI end-of-call payload.")
         # Proceed anyway; defaults will be sent to the sheet using Pydantic defaults
     
+    # Override Phone Number if LLM couldn't extract it
+    phone_val = str(structured_data.get("phone_number", ""))
+    if not phone_val or phone_val.lower().startswith("unknown") or "use_caller_id" in phone_val.lower():
+        customer_number = payload.get("message", {}).get("call", {}).get("customer", {}).get("number")
+        if not customer_number:
+            customer_number = payload.get("message", {}).get("customer", {}).get("number")
+        if customer_number:
+            print(f"Fallback to true caller ID: {customer_number}")
+            structured_data["phone_number"] = customer_number
+
     # Parse into our deterministic Pydantic model
     validated_data = VAPICallData(**structured_data).model_dump()
     
