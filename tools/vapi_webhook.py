@@ -40,9 +40,9 @@ class VAPICallData(BaseModel):
 
     model_config = ConfigDict(extra='ignore')
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
-    """Healthcheck endpoint for Render and Keep-Alive pings."""
+    """Healthcheck endpoint for Render and Keep-Alive pings. Accepts HEAD for UptimeRobot."""
     return {"status": "ok", "service": "VAPI Webhook Endpoint"}
 
 @app.post("/api/vapi/webhook")
