@@ -64,15 +64,27 @@ async def vapi_webhook(request: Request, api_key: str = Security(get_api_key)):
          # Return quickly for other webhook events like 'status-update'
          return {"status": "ignored", "reason": "Not an end-of-call-report"}
 
-    # Extract the structured data output from the analysis
+    # 1. Try legacy structuredData (Deprecated)
     analysis = payload.get("message", {}).get("analysis", {})
     structured_data = analysis.get("structuredData", {})
+    
+    # 2. Try new structuredOutputs array
+    if not structured_data:
+        artifact = payload.get("message", {}).get("artifact", {})
+        # Sometimes artifact is nested inside "call" depending on webhook trigger type
+        if not artifact:
+             artifact = payload.get("message", {}).get("call", {}).get("artifact", {})
+             
+        structured_outputs = artifact.get("structuredOutputs", [])
+        if structured_outputs and isinstance(structured_outputs, list):
+             # Extract the 'result' object from the first structured output
+             structured_data = structured_outputs[0].get("result", {})
 
     print(f"Extracted Structured Data: {structured_data}")
 
     if not structured_data:
-        print("Warning: No structuredData found in the VAPI end-of-call-report payload.")
-        # Proceed anyway; defaults will be sent to the sheet
+        print("Warning: No structuredData or structuredOutputs found in the VAPI end-of-call payload.")
+        # Proceed anyway; defaults will be sent to the sheet using Pydantic defaults
     
     # Parse into our deterministic Pydantic model
     validated_data = VAPICallData(**structured_data).model_dump()
