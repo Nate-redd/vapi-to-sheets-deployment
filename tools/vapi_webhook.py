@@ -48,84 +48,79 @@ async def root():
 @app.post("/api/vapi/webhook")
 async def vapi_webhook(request: Request, api_key: str = Security(get_api_key)):
     """Receives the end-of-call-report webhook from VAPI."""
-    payload = await request.json()
-    
-    # Debugging: Save the raw payload to .tmp to understand exact VAPI structure
-    import json
-    os.makedirs(".tmp", exist_ok=True)
-    with open(".tmp/last_webhook_raw.json", "w") as f:
-        json.dump(payload, f, indent=2)
+    try:
+        payload = await request.json()
+        
+        # Validate that this is the end-of-call report
+        message_type = payload.get("message", {}).get("type")
+        
+        if message_type != "end-of-call-report":
+             return {"status": "ignored", "reason": "Not an end-of-call-report"}
 
-    # Validate that this is the end-of-call report
-    message_type = payload.get("message", {}).get("type")
-    
-    if message_type != "end-of-call-report":
-         # We only care about the end-of-call-report
-         # Return quickly for other webhook events like 'status-update'
-         return {"status": "ignored", "reason": "Not an end-of-call-report"}
+        # 1. Try legacy structuredData (Deprecated)
+        analysis = payload.get("message", {}).get("analysis", {})
+        if not analysis:
+             analysis = payload.get("message", {}).get("call", {}).get("analysis", {})
+             
+        structured_data = analysis.get("structuredData", {})
+        
+        # 2. Try new structuredOutputs dictionary
+        if not structured_data:
+            structured_outputs = analysis.get("structuredOutputs", {})
+            if structured_outputs and isinstance(structured_outputs, dict):
+                 if len(structured_outputs.keys()) > 0:
+                     first_key = list(structured_outputs.keys())[0]
+                     structured_data = structured_outputs[first_key].get("result", {})
 
-    # 1. Try legacy structuredData (Deprecated)
-    analysis = payload.get("message", {}).get("analysis", {})
-    if not analysis:
-         analysis = payload.get("message", {}).get("call", {}).get("analysis", {})
-         
-    structured_data = analysis.get("structuredData", {})
-    
-    # 2. Try new structuredOutputs dictionary
-    if not structured_data:
-        structured_outputs = analysis.get("structuredOutputs", {})
-        if structured_outputs and isinstance(structured_outputs, dict):
-             # Grab the first random key since there is only one schema
-             if len(structured_outputs.keys()) > 0:
-                 first_key = list(structured_outputs.keys())[0]
-                 structured_data = structured_outputs[first_key].get("result", {})
+        print(f"Extracted Structured Data: {structured_data}")
 
-    print(f"Extracted Structured Data: {structured_data}")
+        if not structured_data:
+            print("Warning: No structuredData or structuredOutputs found in the VAPI end-of-call payload.")
+        
+        # Override Phone Number if LLM couldn't extract it
+        phone_val = str(structured_data.get("phone_number", ""))
+        phone_val_lower = phone_val.lower()
+        
+        if not phone_val or "unknown" in phone_val_lower or "caller" in phone_val_lower or len(phone_val) < 7:
+            customer_number = payload.get("message", {}).get("call", {}).get("customer", {}).get("number")
+            if not customer_number:
+                customer_number = payload.get("message", {}).get("customer", {}).get("number")
+                
+            # Forcibly retrieve true telecom Caller ID from VAPI API
+            if not customer_number:
+                call_id = payload.get("message", {}).get("call", {}).get("id")
+                if call_id:
+                    try:
+                        import urllib.request
+                        vapi_key = os.getenv("VAPI_SECRET_TOKEN")
+                        req = urllib.request.Request(f"https://api.vapi.ai/call/{call_id}")
+                        req.add_header("Authorization", f"Bearer {vapi_key}")
+                        # Adding timeout to prevent webhook hanging
+                        with urllib.request.urlopen(req, timeout=5) as res:
+                            call_obj = json.loads(res.read().decode())
+                            customer_number = call_obj.get("customer", {}).get("number")
+                    except Exception as e:
+                        print(f"Failed forceful telecom override: {e}")
+                        
+            if customer_number:
+                print(f"Fallback to true caller ID: {customer_number}")
+                structured_data["phone_number"] = customer_number
 
-    if not structured_data:
-        print("Warning: No structuredData or structuredOutputs found in the VAPI end-of-call payload.")
-        # Proceed anyway; defaults will be sent to the sheet using Pydantic defaults
-    
-    # Override Phone Number if LLM couldn't extract it
-    phone_val = str(structured_data.get("phone_number", ""))
-    phone_val_lower = phone_val.lower()
-    
-    if not phone_val or "unknown" in phone_val_lower or "caller" in phone_val_lower or len(phone_val) < 7:
-        customer_number = payload.get("message", {}).get("call", {}).get("customer", {}).get("number")
-        if not customer_number:
-            customer_number = payload.get("message", {}).get("customer", {}).get("number")
-            
-        # Forcibly retrieve true telecom Caller ID from VAPI API
-        if not customer_number:
-            call_id = payload.get("message", {}).get("call", {}).get("id")
-            if call_id:
-                try:
-                    import urllib.request
-                    vapi_key = os.getenv("VAPI_SECRET_TOKEN")
-                    req = urllib.request.Request(f"https://api.vapi.ai/call/{call_id}")
-                    req.add_header("Authorization", f"Bearer {vapi_key}")
-                    with urllib.request.urlopen(req) as res:
-                        call_obj = json.loads(res.read().decode())
-                        customer_number = call_obj.get("customer", {}).get("number")
-                except Exception as e:
-                    print(f"Failed forceful telecom override: {e}")
-                    
-        if customer_number:
-            print(f"Fallback to true caller ID: {customer_number}")
-            structured_data["phone_number"] = customer_number
+        # Parse into our deterministic Pydantic model
+        validated_data = VAPICallData(**structured_data).model_dump()
+        
+        # Route via Orchestration to Execution Tool
+        success = append_to_sheet(validated_data)
+        
+        if success:
+             return {"status": "success", "message": "Row appended to Google Sheets."}
+        else:
+             return {"status": "partial_failure", "message": "Failed to write to sheets, data logged locally."}
 
-    # Parse into our deterministic Pydantic model
-    validated_data = VAPICallData(**structured_data).model_dump()
-    
-    # Route via Orchestration to Execution Tool
-    success = append_to_sheet(validated_data)
-    
-    if success:
-         return {"status": "success", "message": "Row appended to Google Sheets."}
-    else:
-         # Note: append_to_sheet already logs failures to .tmp/sheets_failures.json
-         # So we return gracefully to VAPI without failing its server sync
-         return {"status": "partial_failure", "message": "Failed to write to sheets, data logged locally."}
+    except Exception as e:
+        print(f"CRITICAL WEBHOOK ERROR: {e}")
+        # We STILL return 200 OK so VAPI doesn't get confused and freeze the agent
+        return {"status": "error", "message": "Webhook crashed but intercepted gracefully.", "error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
