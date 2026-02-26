@@ -76,8 +76,9 @@ async def vapi_webhook(request: Request, api_key: str = Security(get_api_key)):
         structured_outputs = analysis.get("structuredOutputs", {})
         if structured_outputs and isinstance(structured_outputs, dict):
              # Grab the first random key since there is only one schema
-             first_key = list(structured_outputs.keys())[0]
-             structured_data = structured_outputs[first_key].get("result", {})
+             if len(structured_outputs.keys()) > 0:
+                 first_key = list(structured_outputs.keys())[0]
+                 structured_data = structured_outputs[first_key].get("result", {})
 
     print(f"Extracted Structured Data: {structured_data}")
 
@@ -93,6 +94,22 @@ async def vapi_webhook(request: Request, api_key: str = Security(get_api_key)):
         customer_number = payload.get("message", {}).get("call", {}).get("customer", {}).get("number")
         if not customer_number:
             customer_number = payload.get("message", {}).get("customer", {}).get("number")
+            
+        # Forcibly retrieve true telecom Caller ID from VAPI API
+        if not customer_number:
+            call_id = payload.get("message", {}).get("call", {}).get("id")
+            if call_id:
+                try:
+                    import urllib.request
+                    vapi_key = os.getenv("VAPI_SECRET_TOKEN")
+                    req = urllib.request.Request(f"https://api.vapi.ai/call/{call_id}")
+                    req.add_header("Authorization", f"Bearer {vapi_key}")
+                    with urllib.request.urlopen(req) as res:
+                        call_obj = json.loads(res.read().decode())
+                        customer_number = call_obj.get("customer", {}).get("number")
+                except Exception as e:
+                    print(f"Failed forceful telecom override: {e}")
+                    
         if customer_number:
             print(f"Fallback to true caller ID: {customer_number}")
             structured_data["phone_number"] = customer_number
