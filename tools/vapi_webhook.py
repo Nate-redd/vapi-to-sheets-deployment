@@ -87,7 +87,9 @@ async def vapi_webhook(request: Request, api_key: str = Security(get_api_key)):
     
     # Override Phone Number if LLM couldn't extract it
     phone_val = str(structured_data.get("phone_number", ""))
-    if not phone_val or phone_val.lower().startswith("unknown") or "use_caller_id" in phone_val.lower():
+    phone_val_lower = phone_val.lower()
+    
+    if not phone_val or "unknown" in phone_val_lower or "caller" in phone_val_lower or len(phone_val) < 7:
         customer_number = payload.get("message", {}).get("call", {}).get("customer", {}).get("number")
         if not customer_number:
             customer_number = payload.get("message", {}).get("customer", {}).get("number")
