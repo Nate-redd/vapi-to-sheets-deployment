@@ -1,0 +1,350 @@
+{
+  "name": "Adib V2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "water-restoration",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1024,
+        160
+      ],
+      "id": "f1bef6ae-f643-4ff3-8238-04f7f6479f78",
+      "name": "Webhook",
+      "webhookId": "b7c85d2c-5669-48ff-ba60-ead86003b28b"
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.body.message.type }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "end-of-call-report"
+            }
+          ]
+        }
+      },
+      "id": "97f150e5-184d-48aa-bc8b-78f78a3668c3",
+      "name": "Route Message Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        -816,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"status\": \"success\"\n}",
+        "options": {}
+      },
+      "id": "ff036ac5-8420-407d-be08-146efb625b04",
+      "name": "Respond Webhook (End of Call)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1p1_3VsS62YrFAtQwebBy55Gs1aGngabKT_wuSbOovzE",
+          "mode": "list",
+          "cachedResultName": "AI Agent Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1p1_3VsS62YrFAtQwebBy55Gs1aGngabKT_wuSbOovzE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1NDt_JipidFIIg40VlADycKwELFrsQJJhRixQWIKu24g/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Rooms Affected": "={{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.affected_rooms_count }}",
+            "First Name": "={{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.caller_first_name }}",
+            "Last Name": "={{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.caller_last_name }}",
+            "Phone Number": "= {{ $('Webhook').item.json.body.message.call.customer.number }}\n\n",
+            "Zip Code": "={{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.zip_code }}",
+            "Standing Water?": "={{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.standing_or_leaking_water }}",
+            "Affected Areas": "={{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.affected_areas_scope }}",
+            "Leak Stopped?": "={{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.leak_stopped }}",
+            "Leak Timeline": "={{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.leak_timeline }}",
+            "Has Insurance?": "={{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.has_insurance }}",
+            "Call Summary": "={{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.call_summary }}",
+            "voice URL": "={{ $('Webhook').item.json.body.message.artifact.recordingUrl }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Name",
+              "displayName": "Last Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Phone Number",
+              "displayName": "Phone Number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Zip Code",
+              "displayName": "Zip Code",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Standing Water?",
+              "displayName": "Standing Water?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Affected Areas",
+              "displayName": "Affected Areas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Rooms Affected",
+              "displayName": "Rooms Affected",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Leak Stopped?",
+              "displayName": "Leak Stopped?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Leak Timeline",
+              "displayName": "Leak Timeline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Has Insurance?",
+              "displayName": "Has Insurance?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Call Summary",
+              "displayName": "Call Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "voice URL",
+              "displayName": "voice URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "41fb23c5-e88d-4f05-8321-a92a888d4254",
+      "name": "Save Call Report",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        -336,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QvRffHpGzHnB1TND",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Maps 'structuredData' fields"
+    },
+    {
+      "parameters": {
+        "chatId": "5710999905",
+        "text": "=🚨 *NEW HOT LEAD!* 🚨\n\n*Name:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.caller_first_name }} {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.caller_last_name }}\n*Phone:* {{ $('Webhook').item.json.body.message.artifact.variables.customer.number }}\n*ZIP code:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.zip_code }} \n*Affected Area* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.affected_areas_scope }}\n*Rooms:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.affected_rooms_count }}\n*Standing Water:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.standing_or_leaking_water }}\n*Insurance claim:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.has_insurance }}\n*Leak age:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.leak_timeline }}\n*Leak stopped:*{{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.leak_stopped }}\n*Call Recording link* \n{{ $('Webhook').item.json.body.message.artifact.recordingUrl }}\n\n*Call Summary:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.call_summary }}\n\n☎️ *CALL THEM NOW!*\n",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -96,
+        48
+      ],
+      "id": "cbf98ccb-8d7f-404a-b407-c2f6d4a93f50",
+      "name": "Send a EMERGENCY message",
+      "webhookId": "0e027b99-347f-47a6-b4cb-544527102024",
+      "credentials": {
+        "telegramApi": {
+          "id": "H7VgoLYpTEJFLcuM",
+          "name": "Adib_telegram_bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "1672768171",
+        "text": "=🚨 *NEW HOT LEAD!* 🚨\n\n*Name:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.caller_first_name }} {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.caller_last_name }}\n*Phone:* {{ $('Webhook').item.json.body.message.artifact.variables.customer.number }}\n*ZIP code:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.zip_code }} \n*Affected Area* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.affected_areas_scope }}\n*Rooms:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.affected_rooms_count }}\n*Standing Water:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.standing_or_leaking_water }}\n*Insurance claim:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.has_insurance }}\n*Leak age:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.leak_timeline }}\n*Leak stopped:*{{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.leak_stopped }}\n*Call Recording link* \n{{ $('Webhook').item.json.body.message.artifact.recordingUrl }}\n\n*Call Summary:* {{ $('Webhook').item.json.body.message.artifact.structuredOutputs['36a835d1-c09a-4001-91c9-650cf4898f4e'].result.call_summary }}\n\n☎️ *CALL THEM NOW!*\n",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -96,
+        320
+      ],
+      "id": "d89906f3-8912-48dd-b254-c6aafb2df827",
+      "name": "Send a EMERGENCY message1",
+      "webhookId": "0e027b99-347f-47a6-b4cb-544527102024",
+      "credentials": {
+        "telegramApi": {
+          "id": "H7VgoLYpTEJFLcuM",
+          "name": "Adib_telegram_bot"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Route Message Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Message Type": {
+      "main": [
+        [
+          {
+            "node": "Respond Webhook (End of Call)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Webhook (End of Call)": {
+      "main": [
+        [
+          {
+            "node": "Save Call Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Call Report": {
+      "main": [
+        [
+          {
+            "node": "Send a EMERGENCY message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a EMERGENCY message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "b88c9250-b795-4bdf-98ec-7f04b8a2aa97",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0d45c853f1600f1b8ea67b538e4e14aa60d04dc6f75db5be7723a6d90e92adfb"
+  },
+  "id": "xKbMw1bk9epS56qr",
+  "tags": []
+}

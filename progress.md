@@ -8,3 +8,4 @@ A running track of what was done, errors, tests, and results.
 - **Phase 3 (Architect):** Created `architecture/vapi_to_sheets.md` SOP.
 - **Phase 3 (Tools):** Built `tools/vapi_webhook.py` (FastAPI) and `tools/sheets_appender.py` (Google Sheets API client).
 - **Phase 2 (Link - Local Testing):** Started local server and threw a mock JSON payload at the webhook. Tested the self-healing error handler: successfully logged to `.tmp/sheets_failures.json` when `credentials.json` was missing.
+- **VAPI Config:** Updated `.env` with new Assistant ID (`769da4c0...`) and API Key (`77dcd3b5...`).

@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 # Layer 3 Execution Tools
 from tools.sheets_appender import append_to_sheet
+from tools.telegram_notifier import send_telegram_alert
 
 load_dotenv()
 
@@ -32,24 +33,26 @@ class VAPICallData(BaseModel):
     zip_code: str | None = None
     standing_or_leaking_water: bool | None = None
     affected_areas_scope: str | None = None
-    affected_rooms_count: int | None = None
+    affected_rooms_count: int | str | None = None
     leak_stopped: bool | None = None
     leak_timeline: str | None = None
     has_insurance: bool | None = None
     call_summary: str | None = None
+    recording_url: str | None = None
 
     model_config = ConfigDict(extra='ignore')
 
 
 def format_us_phone(raw: str) -> str:
     """Formats a raw phone string into US format: (XXX) XXX-XXXX"""
-    digits = re.sub(r'\D', '', raw)
+    if not raw:
+        return ""
+    digits = re.sub(r'\D', '', str(raw))
     # Strip leading country code 1
     if len(digits) == 11 and digits.startswith("1"):
         digits = digits[1:]
     if len(digits) == 10:
         return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
-    # Return cleaned digits if we can't format
     return raw
 
 
@@ -58,9 +61,6 @@ def fetch_call_from_vapi(call_id: str) -> dict:
     vapi_key = os.getenv("VAPI_SECRET_TOKEN")
     url = f"https://api.vapi.ai/call/{call_id}"
 
-    # VAPI's structuredOutputs analysis runs after the call ends.
-    # The webhook fires immediately, but the analysis takes 5-15 seconds.
-    # We retry up to 3 times with a 5-second delay to wait for it.
     for attempt in range(3):
         try:
             req = urllib.request.Request(url)
@@ -68,15 +68,13 @@ def fetch_call_from_vapi(call_id: str) -> dict:
             with urllib.request.urlopen(req, timeout=10) as res:
                 call_obj = json.loads(res.read().decode())
 
-            # Check if structuredOutputs are populated
             analysis = call_obj.get("analysis", {})
             structured_outputs = analysis.get("structuredOutputs", {})
             if structured_outputs and isinstance(structured_outputs, dict):
-                first_key = list(structured_outputs.keys())[0]
-                result = structured_outputs[first_key].get("result", {})
-                if result:
-                    print(f"[Attempt {attempt+1}] Got structuredOutputs from VAPI API")
-                    return call_obj
+                for key in structured_outputs:
+                    if structured_outputs[key].get("result"):
+                        print(f"[Attempt {attempt+1}] Got structuredOutputs from VAPI API")
+                        return call_obj
 
             print(f"[Attempt {attempt+1}] structuredOutputs not ready yet, waiting 5s...")
             time.sleep(5)
@@ -85,15 +83,8 @@ def fetch_call_from_vapi(call_id: str) -> dict:
             print(f"[Attempt {attempt+1}] VAPI API fetch failed: {e}")
             time.sleep(3)
 
-    # Return whatever we got on last attempt
-    print("All retries exhausted. Returning last fetched call object.")
-    try:
-        req = urllib.request.Request(url)
-        req.add_header("Authorization", f"Bearer {vapi_key}")
-        with urllib.request.urlopen(req, timeout=10) as res:
-            return json.loads(res.read().decode())
-    except:
-        return {}
+    print("All retries exhausted.")
+    return {}
 
 
 @app.api_route("/", methods=["GET", "HEAD"])
@@ -106,32 +97,51 @@ async def root():
 async def vapi_webhook(request: Request, api_key: str = Security(get_api_key)):
     """Receives the end-of-call-report webhook from VAPI."""
     try:
-        payload = await request.json()
+        raw_payload = await request.json()
+        
+        # Handle case where payload is a list (n8n execution format)
+        if isinstance(raw_payload, list) and len(raw_payload) > 0:
+            payload = raw_payload[0].get("body", raw_payload[0])
+        else:
+            payload = raw_payload
 
-        # Only process end-of-call-report
-        message_type = payload.get("message", {}).get("type")
+        message = payload.get("message", {})
+        message_type = message.get("type")
+        
         if message_type != "end-of-call-report":
-            return {"status": "ignored", "reason": "Not an end-of-call-report"}
+            return {"status": "ignored", "reason": f"Type {message_type} is not end-of-call-report"}
 
-        # Get the call ID - this is the key to everything
-        call_id = payload.get("message", {}).get("call", {}).get("id")
+        # Robust extraction of call data from payload
+        artifact = message.get("artifact", {})
+        # VAPI puts 'call' at the root of 'message', but the user payload has it in 'artifact'
+        call = message.get("call") or artifact.get("call") or {}
+        call_id = call.get("id")
+        
         if not call_id:
             print("ERROR: No call ID found in webhook payload")
             return {"status": "error", "message": "No call ID in payload"}
 
-        # Grab the customer phone number from the webhook payload immediately
-        customer_number = payload.get("message", {}).get("call", {}).get("customer", {}).get("number")
+        # Get customer number as early as possible
+        customer_number = call.get("customer", {}).get("number")
+        if not customer_number:
+            customer_number = message.get("customer", {}).get("number")
 
-        # Fetch the COMPLETE call object from VAPI API with retry
-        # This solves the race condition where the webhook fires before analysis finishes
+        # Fetch full object from API
         call_obj = fetch_call_from_vapi(call_id)
+        
+        # Determine which analysis object to use
+        if call_obj:
+            analysis_source = call_obj.get("analysis", {})
+            # Also check artifact in call_obj
+            if not analysis_source.get("structuredOutputs"):
+                analysis_source = call_obj.get("artifact", {})
+        else:
+            # Fallback to payload's artifact/analysis
+            analysis_source = artifact if artifact.get("structuredOutputs") else message.get("analysis", {})
 
-        # Extract structured data from the API response
+        # Extract structured data
         structured_data = {}
-        analysis = call_obj.get("analysis", {})
-
-        # Try structuredOutputs first (new format)
-        structured_outputs = analysis.get("structuredOutputs", {})
+        structured_outputs = analysis_source.get("structuredOutputs", {})
         if structured_outputs and isinstance(structured_outputs, dict):
             for key in structured_outputs:
                 result = structured_outputs[key].get("result", {})
@@ -139,36 +149,40 @@ async def vapi_webhook(request: Request, api_key: str = Security(get_api_key)):
                     structured_data = result
                     break
 
-        # Fallback to legacy structuredData
         if not structured_data:
-            structured_data = analysis.get("structuredData", {})
+            structured_data = analysis_source.get("structuredData", {})
 
-        print(f"Extracted Structured Data: {structured_data}")
+        # Merge in recording URL
+        recording_url = artifact.get("recordingUrl") or call_obj.get("recordingUrl")
+        if recording_url:
+            structured_data["recording_url"] = recording_url
 
-        # Phone number override: always use the telecom caller ID if LLM failed
+        # Phone number reconciliation
         phone_val = str(structured_data.get("phone_number", ""))
-        phone_lower = phone_val.lower()
-        if not phone_val or "unknown" in phone_lower or "caller" in phone_lower or len(phone_val) < 7:
-            # Use the number from the webhook payload or from the API call object
-            if not customer_number:
-                customer_number = call_obj.get("customer", {}).get("number")
+        if not phone_val or any(x in phone_val.lower() for x in ["unknown", "caller", "null", "none"]):
             if customer_number:
                 structured_data["phone_number"] = customer_number
+        
+        # Ensure rooms count is an integer if possible
+        rooms = structured_data.get("affected_rooms_count")
+        if rooms and isinstance(rooms, str) and rooms.isdigit():
+            structured_data["affected_rooms_count"] = int(rooms)
 
-        # Format the phone number as US standard
+        # Format Final Phone
         if structured_data.get("phone_number"):
             structured_data["phone_number"] = format_us_phone(structured_data["phone_number"])
 
-        # Parse into our deterministic Pydantic model
+        # Parse and Send
         validated_data = VAPICallData(**structured_data).model_dump()
+        print(f"Final Data for Output: {json.dumps(validated_data, indent=2)}")
 
-        # Route to Google Sheets
-        success = append_to_sheet(validated_data)
+        sheets_success = append_to_sheet(validated_data)
+        telegram_success = send_telegram_alert(validated_data)
 
-        if success:
-            return {"status": "success", "message": "Row appended to Google Sheets."}
+        if sheets_success and telegram_success:
+            return {"status": "success", "message": "Row appended to Google Sheets and Telegram alert sent."}
         else:
-            return {"status": "partial_failure", "message": "Failed to write to sheets, data logged locally."}
+            return {"status": "partial_failure", "message": "Failed to write to one or more systems. Check logs."}
 
     except Exception as e:
         print(f"CRITICAL WEBHOOK ERROR: {e}")

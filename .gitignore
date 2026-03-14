@@ -3,3 +3,5 @@ credentials.json
 .tmp/
 __pycache__/
 *.pyc
+render_deploy_output.json
+render_env_variables.txt
